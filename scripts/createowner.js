@@ -21,9 +21,9 @@ async function createOwner() {
     );
   }
 
-  if (password.length < 12) {
+  if (password.length < 6) {
     throw new Error(
-      "OWNER_PASSWORD must contain at least 12 characters."
+      "OWNER_PASSWORD must contain at least 6 characters."
     );
   }
 

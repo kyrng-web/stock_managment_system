@@ -4,6 +4,7 @@ const {
   createUser,
   listUsers,
   setProductPermission,
+  deleteUser,
 } = require("../controllers/userController");
 
 const { protect } = require("../middleware/auth");
@@ -32,6 +33,12 @@ router.patch(
   "/:id/product-permission",
   authorizeRoles("superadmin", "admin"),
   setProductPermission
+);
+
+router.delete(
+  "/:id",
+  authorizeRoles("superadmin", "admin"),
+  deleteUser
 );
 
 module.exports = router;

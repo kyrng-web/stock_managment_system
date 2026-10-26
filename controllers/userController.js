@@ -204,3 +204,74 @@ exports.setProductPermission = async (req, res) => {
     });
   }
 };
+exports.deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!/^[a-fA-F0-9]{24}$/.test(id)) {
+      return res.status(400).json({
+        message: "Invalid user ID.",
+      });
+    }
+
+    if (!["superadmin", "admin"].includes(req.user.role)) {
+      return res.status(403).json({
+        message: "You are not allowed to delete users.",
+      });
+    }
+
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found.",
+      });
+    }
+
+    // Protect the Owner account.
+    if (user.role === "superadmin") {
+      return res.status(403).json({
+        message: "The Owner account cannot be deleted here.",
+      });
+    }
+
+    // Prevent users from deleting their own accounts.
+    const currentUserId = String(
+      req.user._id || req.user.id || req.user.userId || req.user.sub || ""
+    );
+
+    if (currentUserId && currentUserId === user._id.toString()) {
+      return res.status(403).json({
+        message: "You cannot delete your own account.",
+      });
+    }
+
+    // Boss can delete storekeepers only.
+    if (
+      req.user.role === "admin" &&
+      user.role !== "storekeeper"
+    ) {
+      return res.status(403).json({
+        message: "Bosses can delete storekeepers only.",
+      });
+    }
+
+    await User.findByIdAndDelete(id);
+
+    return res.status(200).json({
+      message: "User deleted successfully.",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Delete user error:", error.message);
+
+    return res.status(500).json({
+      message: "Unable to delete user.",
+    });
+  }
+};
