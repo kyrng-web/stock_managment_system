@@ -61,24 +61,32 @@ exports.createUser = async (req, res) => {
       });
     }
 
-    if (!["admin", "storekeeper"].includes(role)) {
-      return res.status(400).json({
-        message: "Role must be admin or storekeeper.",
-      });
-    }
+   // Only Owner and Boss can create users.
+if (!["superadmin", "admin"].includes(req.user.role)) {
+  return res.status(403).json({
+    message: "You are not allowed to create users."
+  });
+}
 
-    // Bosses can create storekeepers only.
-    if (req.user.role === "admin" && role !== "storekeeper") {
-      return res.status(403).json({
-        message: "Bosses can create storekeepers only.",
-      });
-    }
+// Boss can create Storekeeper and user accounts only.
+if (
+  req.user.role === "admin" &&
+  role !== "storekeeper" && role !== "user"
+) {
+  return res.status(403).json({
+    message: "Bosses can create storekeepers only."
+  });
+}
 
-    if (!["superadmin", "admin"].includes(req.user.role)) {
-      return res.status(403).json({
-        message: "You cannot create users.",
-      });
-    }
+// Owner can create Boss, Storekeeper and User accounts.
+if (
+  req.user.role === "superadmin" &&
+  !["admin", "storekeeper", "user"].includes(role)
+) {
+  return res.status(403).json({
+    message: "Invalid user role."
+  });
+}
 
     const existingUser = await User.findOne({ email });
 

@@ -48,13 +48,13 @@ async function requireProductPermission(req, res, next) {
     }
 
     if (
-      user.role !== "superadmin" &&
-      user.canAddProduct !== true
-    ) {
-      return res.status(403).json({
-        message: "You do not have permission to add products.",
-      });
-    }
+  user.role === "user" ||
+  (user.role !== "superadmin" && user.canAddProduct !== true)
+) {
+  return res.status(403).json({
+    message: "You do not have permission to add products.",
+  });
+}
 
     next();
   } catch (error) {

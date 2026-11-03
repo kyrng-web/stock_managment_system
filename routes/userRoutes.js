@@ -25,6 +25,7 @@ router.get(
 
 router.post(
   "/",
+  protect,
   authorizeRoles("superadmin", "admin"),
   createUser
 );

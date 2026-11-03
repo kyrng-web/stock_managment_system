@@ -48,16 +48,47 @@ function populateAuditFields(query) {
 }
 
 // GET all products with creator and last updater.
+
 exports.getProducts = async (req, res) => {
   try {
-    const products = await populateAuditFields(
-      Product.find().sort({ createdAt: -1 }).maxTimeMS(5000)
-    ).exec();
+    const canSeeAudit = [
+      "superadmin",
+      "admin",
+      "storekeeper"
+    ].includes(req.user.role);
 
-   return res.status(200).json({
-  count: products.length,
-  products: products.map(productResponse),
-});
+    let query = Product.find()
+      .sort({ createdAt: -1 })
+      .maxTimeMS(5000);
+
+    // Populate creator and updater only for authorized roles.
+    if (canSeeAudit) {
+      query = query
+        .populate("createdBy", "name -_id")
+        .populate("updatedBy", "name -_id");
+    }
+
+    const products = await query.exec();
+
+    const result = products.map((product) => {
+      const data = product.toObject();
+
+      if (canSeeAudit) {
+        data.createdBy = data.createdBy?.name || null;
+        data.updatedBy = data.updatedBy?.name || null;
+      } else {
+        delete data.createdBy;
+        delete data.updatedBy;
+      }
+
+      return data;
+    });
+
+    return res.status(200).json({
+      count: result.length,
+      products: result,
+    });
+
   } catch (error) {
     console.error("Get products error:", error.message);
 
@@ -66,6 +97,7 @@ exports.getProducts = async (req, res) => {
     });
   }
 };
+
 
 // POST create product and record who created it.
 exports.createProduct = async (req, res) => {

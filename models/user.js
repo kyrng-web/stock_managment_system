@@ -29,11 +29,11 @@ const userSchema = new mongoose.Schema(
     },
 
     role: {
-      type: String,
-      enum: ["superadmin", "admin", "storekeeper"],
-      required: true,
-      default: "storekeeper",
-    },
+  type: String,
+  enum: ["superadmin", "admin", "storekeeper", "user"],
+  required: true,
+  default: "user",
+},
 
     canAddProduct: {
       type: Boolean,
