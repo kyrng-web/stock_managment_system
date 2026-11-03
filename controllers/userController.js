@@ -1,6 +1,22 @@
 const bcrypt = require("bcryptjs");
 const User = require("../models/user");
 
+function getActorId(user) {
+  return user?._id || user?.id || user?.userId || user?.sub || null;
+}
+
+function createdBySummary(user) {
+  if (!user?.createdBy) return null;
+
+  return {
+    id: user.createdBy._id,
+    name: user.createdBy.name,
+    email: user.createdBy.email,
+    role: user.createdBy.role,
+  };
+}
+
+// POST create user and record who created the account.
 exports.createUser = async (req, res) => {
   try {
     const name = String(req.body.name || "").trim();
@@ -12,6 +28,8 @@ exports.createUser = async (req, res) => {
     const role = String(req.body.role || "")
       .trim()
       .toLowerCase();
+
+    const creatorId = getActorId(req.user);
 
     if (
       !name ||
@@ -25,26 +43,9 @@ exports.createUser = async (req, res) => {
       });
     }
 
-    if (!["admin", "storekeeper"].includes(role)) {
-      return res.status(400).json({
-        message: "Role must be admin or storekeeper.",
-      });
-    }
-
-    if (
-      req.user.role === "admin" &&
-      role !== "storekeeper"
-    ) {
-      return res.status(403).json({
-        message: "Bosses can create storekeepers only.",
-      });
-    }
-
-    if (
-      !["superadmin", "admin"].includes(req.user.role)
-    ) {
-      return res.status(403).json({
-        message: "You cannot create users.",
+    if (!creatorId) {
+      return res.status(401).json({
+        message: "Cannot identify the logged-in user.",
       });
     }
 
@@ -57,6 +58,25 @@ exports.createUser = async (req, res) => {
     if (password.length < 8) {
       return res.status(400).json({
         message: "Password must be at least 8 characters.",
+      });
+    }
+
+    if (!["admin", "storekeeper"].includes(role)) {
+      return res.status(400).json({
+        message: "Role must be admin or storekeeper.",
+      });
+    }
+
+    // Bosses can create storekeepers only.
+    if (req.user.role === "admin" && role !== "storekeeper") {
+      return res.status(403).json({
+        message: "Bosses can create storekeepers only.",
+      });
+    }
+
+    if (!["superadmin", "admin"].includes(req.user.role)) {
+      return res.status(403).json({
+        message: "You cannot create users.",
       });
     }
 
@@ -76,7 +96,10 @@ exports.createUser = async (req, res) => {
       password: hashedPassword,
       role,
       canAddProduct: false,
+      createdBy: creatorId,
     });
+
+    await user.populate("createdBy", "name email role");
 
     return res.status(201).json({
       message: `${role} account created successfully.`,
@@ -86,6 +109,7 @@ exports.createUser = async (req, res) => {
         email: user.email,
         role: user.role,
         canAddProduct: user.canAddProduct,
+        createdBy: createdBySummary(user),
         createdAt: user.createdAt,
       },
     });
@@ -110,6 +134,7 @@ exports.createUser = async (req, res) => {
   }
 };
 
+// GET users with the creator's details.
 exports.listUsers = async (req, res) => {
   try {
     const filter =
@@ -118,7 +143,8 @@ exports.listUsers = async (req, res) => {
         : {};
 
     const users = await User.find(filter)
-      .select("name email role canAddProduct createdAt")
+      .select("name email role canAddProduct createdAt createdBy")
+      .populate("createdBy", "name email role")
       .sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -134,6 +160,7 @@ exports.listUsers = async (req, res) => {
   }
 };
 
+// Grant or revoke permission to add products.
 exports.setProductPermission = async (req, res) => {
   try {
     const { canAddProduct } = req.body;
@@ -173,9 +200,7 @@ exports.setProductPermission = async (req, res) => {
       });
     }
 
-    if (
-      !["superadmin", "admin"].includes(req.user.role)
-    ) {
+    if (!["superadmin", "admin"].includes(req.user.role)) {
       return res.status(403).json({
         message: "You cannot manage product permissions.",
       });
@@ -204,6 +229,8 @@ exports.setProductPermission = async (req, res) => {
     });
   }
 };
+
+// DELETE user.
 exports.deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -228,17 +255,13 @@ exports.deleteUser = async (req, res) => {
       });
     }
 
-    // Protect the Owner account.
     if (user.role === "superadmin") {
       return res.status(403).json({
         message: "The Owner account cannot be deleted here.",
       });
     }
 
-    // Prevent users from deleting their own accounts.
-    const currentUserId = String(
-      req.user._id || req.user.id || req.user.userId || req.user.sub || ""
-    );
+    const currentUserId = String(getActorId(req.user) || "");
 
     if (currentUserId && currentUserId === user._id.toString()) {
       return res.status(403).json({
@@ -246,7 +269,6 @@ exports.deleteUser = async (req, res) => {
       });
     }
 
-    // Boss can delete storekeepers only.
     if (
       req.user.role === "admin" &&
       user.role !== "storekeeper"
@@ -265,6 +287,7 @@ exports.deleteUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        createdBy: user.createdBy || null,
       },
     });
   } catch (error) {
